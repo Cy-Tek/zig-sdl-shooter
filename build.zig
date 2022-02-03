@@ -14,12 +14,32 @@ pub fn build(b: *std.build.Builder) void {
     const exe = b.addExecutable("zig-sdl", "src/main.zig");
     exe.setTarget(target);
     exe.setBuildMode(mode);
+    exe.addLibPath("deps/lib");
 
     exe.linkLibC();
-    exe.addIncludeDir("deps/include");
-    exe.addLibPath("deps/lib");
+    exe.addIncludeDir("deps/include/SDL2");
     exe.linkSystemLibrary("SDL2");
     b.installBinFile("deps/lib/SDL2.dll", "SDL2.dll");
+
+    sdl2_image_setup: {
+        exe.addIncludeDir("deps/include/SDLImage");
+        exe.linkSystemLibrary("SDL2_Image");
+        b.installBinFile("deps/lib/SDL2_Image.dll", "SDL2_Image.dll");
+
+        const dll_files = .{
+            "libjpeg-9.dll",
+            "libpng16-16.dll",
+            "libtiff-5.dll",
+            "libwebp-7.dll",
+            "zlib1.dll",
+        };
+
+        inline for (dll_files) |dll| {
+            b.installBinFile("deps/lib/" ++ dll, dll);
+        }
+
+        break :sdl2_image_setup;
+    }
 
     exe.install();
 
