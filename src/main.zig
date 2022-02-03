@@ -1,33 +1,48 @@
-const c = @cImport({
-    @cInclude("SDL2/SDL.h");
-});
-const assert = @import("std").debug.assert;
+const c = @import("./c.zig");
+const App = @import("./app.zig").App;
+const draw = @import("./draw.zig");
+const Entity = @import("./entity.zig").Entity;
 
 pub fn main() !void {
-    var event: c.SDL_Event = undefined;
+    var app = try App.init();
+    defer app.deinit();
 
-    if (c.SDL_Init(c.SDL_INIT_VIDEO) != 0) {
-        c.SDL_Log("Unable to initialize SDL: %s", c.SDL_GetError());
-        return error.SDLInitializationFailed;
-    }
-    defer c.SDL_Quit();
-
-    const screen = c.SDL_CreateWindow("My SDL Empty Window", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, 640, 480, 0) orelse {
-        c.SDL_Log("Unable to create window: %s", c.SDL_GetError());
-        return error.SDLInitializationFailed;
+    var player = Entity{
+        .x = 100,
+        .y = 100,
+        .texture = try draw.loadTexture("gfx/player.png", &app),
     };
-    defer c.SDL_DestroyWindow(screen);
 
-    var quit = false;
+    var quit: bool = false;
     while (!quit) {
-        if (c.SDL_WaitEvent(&event) == 0) {
-            c.SDL_Log("Failed to wait for event: %s", c.SDL_GetError());
-            return error.SDLInitializationFailed;
-        }
+        draw.prepareScene(&app);
 
-        switch (event.@"type") {
-            c.SDL_QUIT => quit = true,
-            else => continue,
-        }
+        quit = app.handle_input();
+
+        movePlayer(&player, app);
+
+        draw.blit(player.texture, player.x, player.y, &app);
+
+        draw.presentScene(&app);
+
+        c.SDL_Delay(16);
+    }
+}
+
+fn movePlayer(player: *Entity, app: App) void {
+    if (app.up != 0) {
+        player.y -= 4;
+    }
+
+    if (app.down != 0) {
+        player.y += 4;
+    }
+
+    if (app.left != 0) {
+        player.x -= 4;
+    }
+
+    if (app.right != 0) {
+        player.x += 4;
     }
 }
