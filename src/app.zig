@@ -1,19 +1,15 @@
-const c = @import("./c.zig");
 const std = @import("std");
-
-const ScreenWidth = 1280;
-const ScreenHeight = 720;
+const c = @import("./c.zig");
+const config = @import("./consts.zig");
+const stage = @import("./stage.zig");
 
 pub const App = struct {
     const Self = @This();
 
     renderer: *c.SDL_Renderer,
     window: *c.SDL_Window,
-
-    up: i32,
-    down: i32,
-    left: i32,
-    right: i32,
+    keyboard: [config.MaxKeyboardKeys]bool,
+    level: ?stage.Level,
 
     pub fn init() !Self {
         try initSDL();
@@ -21,16 +17,14 @@ pub const App = struct {
         var self = Self{
             .renderer = undefined,
             .window = undefined,
-            .up = 0,
-            .down = 0,
-            .left = 0,
-            .right = 0,
+            .keyboard = [_]bool{false} ** config.MaxKeyboardKeys,
+            .level = null,
         };
 
         const window_flags = 0;
         const renderer_flags = c.SDL_RENDERER_ACCELERATED;
 
-        self.window = c.SDL_CreateWindow("Shooter 01", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, ScreenWidth, ScreenHeight, window_flags) orelse {
+        self.window = c.SDL_CreateWindow("Shooter 01", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, config.ScreenWidth, config.ScreenHeight, window_flags) orelse {
             c.SDL_Log("Couldn't initialize SDL Window: %s\n", c.SDL_GetError);
             return error.SDLInitializationFailure;
         };
@@ -86,26 +80,16 @@ pub const App = struct {
     }
 
     fn handleKeyDown(self: *Self, event: c.SDL_KeyboardEvent) void {
-        if (event.repeat == 0) {
-            switch (event.keysym.scancode) {
-                c.SDL_SCANCODE_UP => self.up = 1,
-                c.SDL_SCANCODE_DOWN => self.down = 1,
-                c.SDL_SCANCODE_LEFT => self.left = 1,
-                c.SDL_SCANCODE_RIGHT => self.right = 1,
-                else => {},
-            }
+        const code = @intCast(u64, event.keysym.scancode);
+        if (event.repeat == 0 and code < config.MaxKeyboardKeys) {
+            self.keyboard[code] = true;
         }
     }
 
     fn handleKeyUp(self: *Self, event: c.SDL_KeyboardEvent) void {
-        if (event.repeat == 0) {
-            switch (event.keysym.scancode) {
-                c.SDL_SCANCODE_UP => self.up = 0,
-                c.SDL_SCANCODE_DOWN => self.down = 0,
-                c.SDL_SCANCODE_LEFT => self.left = 0,
-                c.SDL_SCANCODE_RIGHT => self.right = 0,
-                else => {},
-            }
+        const code = @intCast(u64, event.keysym.scancode);
+        if (event.repeat == 0 and code < config.MaxKeyboardKeys) {
+            self.keyboard[code] = false;
         }
     }
 };

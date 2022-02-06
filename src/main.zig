@@ -1,48 +1,32 @@
 const c = @import("./c.zig");
-const App = @import("./app.zig").App;
+const application = @import("./app.zig");
+const App = application.App;
 const draw = @import("./draw.zig");
 const Entity = @import("./entity.zig").Entity;
+const std = @import("std");
+const stage = @import("./stage.zig");
 
 pub fn main() !void {
     var app = try App.init();
     defer app.deinit();
 
-    var player = Entity{
-        .x = 100,
-        .y = 100,
-        .texture = try draw.loadTexture("gfx/player.png", &app),
-    };
+    var new_stage = try stage.Stage.init(&app);
+    defer new_stage.deinit();
+
+    app.level = new_stage.level();
 
     var quit: bool = false;
     while (!quit) {
-        draw.prepareScene(&app);
+        draw.prepareScene(app.renderer);
 
         quit = app.handle_input();
 
-        movePlayer(&player, app);
+        if (app.level) |level| {
+            level.logic();
+            level.draw();
+        }
 
-        draw.blit(player.texture, player.x, player.y, &app);
-
-        draw.presentScene(&app);
-
+        draw.presentScene(app.renderer);
         c.SDL_Delay(16);
-    }
-}
-
-fn movePlayer(player: *Entity, app: App) void {
-    if (app.up != 0) {
-        player.y -= 4;
-    }
-
-    if (app.down != 0) {
-        player.y += 4;
-    }
-
-    if (app.left != 0) {
-        player.x -= 4;
-    }
-
-    if (app.right != 0) {
-        player.x += 4;
     }
 }
