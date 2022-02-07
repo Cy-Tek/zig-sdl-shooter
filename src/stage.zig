@@ -29,10 +29,10 @@ pub const Stage = struct {
     player: Entity,
 
     bullets: std.ArrayList(Entity),
-    bulletTexture: *c.SDL_Texture,
+    bullet_texture: *c.SDL_Texture,
 
     enemies: std.ArrayList(Entity),
-    enemyTexture: *c.SDL_Texture,
+    enemy_texture: *c.SDL_Texture,
     enemy_spawn_timer: i32 = 0,
 
     pub fn init(app: *App) !Stage {
@@ -48,9 +48,9 @@ pub const Stage = struct {
             .rand = std.rand.DefaultPrng.init(seed),
             .player = try initPlayer(app),
             .bullets = std.ArrayList(Entity).init(arena.allocator()),
-            .bulletTexture = try draw.loadTexture("gfx/playerBullet.png", app.renderer),
+            .bullet_texture = try draw.loadTexture("gfx/playerBullet.png", app.renderer),
             .enemies = std.ArrayList(Entity).init(arena.allocator()),
-            .enemyTexture = try draw.loadTexture("gfx/enemy.png", app.renderer),
+            .enemy_texture = try draw.loadTexture("gfx/enemy.png", app.renderer),
         };
     }
 
@@ -123,7 +123,7 @@ pub const Stage = struct {
             .y = self.player.y,
             .dx = config.PlayerBulletSpeed,
             .health = 1,
-            .texture = self.bulletTexture,
+            .texture = self.bullet_texture,
         };
 
         bullet.setWidthHeightFromTex();
@@ -157,7 +157,7 @@ pub const Stage = struct {
                 .x = config.ScreenWidth,
                 .y = undefined,
                 .dx = -random.intRangeAtMost(i32, 2, 6),
-                .texture = self.enemyTexture,
+                .texture = self.enemy_texture,
             };
 
             enemy.setWidthHeightFromTex();
