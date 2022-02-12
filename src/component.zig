@@ -5,40 +5,36 @@ const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const AutoHashMap = std.AutoHashMap;
 const test_alloc = std.testing.allocator;
-const expect = std.testing.expect;
+const expectEqual = std.testing.expectEqual;
 
 pub const ComponentManager = struct {
     const Self = @This();
 
     allocator: Allocator,
-    comp_map: AutoHashMap(usize, Component),
-    type_map: AutoHashMap(usize, ErasedWrapper),
+    comp_map: AutoHashMap(usize, ErasedComponent),
 
     pub fn init(allocator: Allocator) Self {
-        var comp_map = AutoHashMap(usize, Component).init(allocator);
-        var type_map = AutoHashMap(usize, ErasedWrapper).init(allocator);
+        var comp_map = AutoHashMap(usize, ErasedComponent).init(allocator);
 
         return .{
             .allocator = allocator,
             .comp_map = comp_map,
-            .type_map = type_map,
         };
     }
 
     pub fn deinit(self: *Self) void {
-        var iter = self.type_map.valueIterator();
+        var iter = self.comp_map.valueIterator();
         while (iter.next()) |wrapper| {
             wrapper.deinit(wrapper.ptr, self.allocator);
         }
 
         self.comp_map.deinit();
-        self.type_map.deinit();
     }
 
     pub fn addComponent(self: *Self, parent: anytype) !void {
         const T = @TypeOf(parent);
         const id = utils.typeId(T);
-        const gop = try self.type_map.getOrPut(id);
+        const gop = try self.comp_map.getOrPut(id);
 
         if (gop.found_existing) return;
 
@@ -46,28 +42,26 @@ pub const ComponentManager = struct {
         errdefer self.allocator.destroy(new_ptr);
 
         new_ptr.* = parent;
-        gop.value_ptr.* = ErasedWrapper{
+        gop.value_ptr.* = ErasedComponent{
             .ptr = new_ptr,
             .deinit = (struct {
                 pub fn deinit(erased: *anyopaque, allocator: Allocator) void {
-                    var ptr = ErasedWrapper.cast(erased, T);
+                    var ptr = ErasedComponent.cast(erased, T);
                     allocator.destroy(ptr);
                 }
             }).deinit,
         };
-
-        try self.comp_map.put(id, new_ptr.component());
     }
 
     pub fn getComponent(self: *Self, comptime T: type) ?*T {
         const id = utils.typeId(T);
-        var component: Component = self.comp_map.get(id) orelse return null;
-        return component.get(T);
+        var wrapper: ErasedComponent = self.comp_map.get(id) orelse return null;
+        return ErasedComponent.cast(wrapper.ptr, T);
     }
 };
 
 
-pub const ErasedWrapper = struct {
+pub const ErasedComponent = struct {
     ptr: *anyopaque,
     deinit: fn (erased: *anyopaque, allocator: Allocator) void,
 
@@ -76,41 +70,13 @@ pub const ErasedWrapper = struct {
     }
 };
 
-pub const Component = struct {
-    const Self = @This();
-
-    parent: *anyopaque,
-
-    pub fn init(parent: anytype) Component {
-        return .{
-            .parent = @ptrCast(*anyopaque, parent)
-        };
-    }
-
-    pub fn get(self: *Self, comptime T: type) *T {
-        return utils.castTo(T, self.parent);
-    }
-};
-
 pub const HealthComponent = struct {
-    const Self = @This();
-
     health: i32,
-
-    pub fn component(self: *Self) Component {
-        return Component.init(self);
-    }
 };
 
 pub const PositionComponent = struct {
-    const Self = @This();
-
     x: i32,
     y: i32,
-
-    pub fn component(self: *Self) Component {
-        return Component.init(self);
-    }
 };
 
 test "Add a component" {
@@ -120,7 +86,7 @@ test "Add a component" {
     const health: HealthComponent = .{ .health = 100 };
 
     try manager.addComponent(health);
-    try expect(manager.comp_map.count() == 1);
+    try expectEqual(manager.comp_map.count(), 1);
 }
 
 test "Get a component" {
@@ -132,7 +98,7 @@ test "Get a component" {
     try manager.addComponent(health);
     const comp = manager.getComponent(HealthComponent).?;
 
-    try expect(comp.health == 50);
+    try expectEqual(comp.health, 50);
 }
 
 test "Modify a component" {
@@ -144,7 +110,7 @@ test "Modify a component" {
 
     component.health = 2000;
 
-    try expect(component.health == 2000);
+    try expectEqual(component.health, 2000);
 }
 
 test "Add two components" {
@@ -157,11 +123,11 @@ test "Add two components" {
     try manager.addComponent(health);
     try manager.addComponent(position);
 
-    try expect(manager.comp_map.count() == 2);
+    try expectEqual(manager.comp_map.count(), 2);
 
     const managedPosition = manager.getComponent(PositionComponent).?;
     const managedHealth = manager.getComponent(HealthComponent).?;
 
-    try expect(managedHealth.health == 50);
-    try expect(managedPosition.x == 100 and managedPosition.y == 100);
+    try expectEqual(managedHealth.health, 50);
+    try expectEqual(managedPosition.x, 100);
 }
