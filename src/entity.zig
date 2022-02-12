@@ -10,7 +10,6 @@ pub const Entity = struct {
     health: i32 = 0,
     reload: i32 = 0,
     texture: *c.SDL_Texture,
-    next: ?*Entity = null,
 
     pub fn setWidthHeightFromTex(self: *@This()) void {
         _ = c.SDL_QueryTexture(self.texture, null, null, &self.w, &self.h);
