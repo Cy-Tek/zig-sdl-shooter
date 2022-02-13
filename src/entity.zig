@@ -1,17 +1,26 @@
-const c = @import("./c.zig");
+const std = @import("std");
+const Allocator = std.mem.Allocator;
+
+const comp = @import("./component.zig");
 
 pub const Entity = struct {
-    x: i32 = 0,
-    y: i32 = 0,
-    w: i32 = 0,
-    h: i32 = 0,
-    dx: i32 = 0,
-    dy: i32 = 0,
-    health: i32 = 0,
-    reload: i32 = 0,
-    texture: *c.SDL_Texture,
+    components: comp.Manager,
 
-    pub fn setWidthHeightFromTex(self: *@This()) void {
-        _ = c.SDL_QueryTexture(self.texture, null, null, &self.w, &self.h);
+    pub fn init(alloc: Allocator) Entity {
+        return .{
+            .components = comp.Manager.init(alloc),
+        };
+    }
+
+    pub fn deinit(self: *@This()) void {
+        self.components.deinit();
+    }
+
+    pub fn addComponent(self: *@This(), comptime T: type, component: T) !*T {
+        return try self.components.addComponent(T, component);
+    }
+
+    pub fn getComponent(self: *@This(), comptime ComponentType: type) ?*ComponentType {
+        return self.components.getComponent(ComponentType);
     }
 };

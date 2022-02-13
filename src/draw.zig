@@ -1,6 +1,9 @@
 const c = @import("./c.zig");
 const App = @import("./app.zig").App;
 const Entity = @import("./entity.zig").Entity;
+const component = @import("./component.zig");
+const Texture = component.Texture;
+const Position = component.Position;
 
 pub fn prepareScene(renderer: *c.SDL_Renderer) void {
     _ = c.SDL_SetRenderDrawColor(renderer, 32, 32, 32, 255);
@@ -20,13 +23,13 @@ pub fn loadTexture(filename: []const u8, renderer: *c.SDL_Renderer) !*c.SDL_Text
     return texture;
 }
 
-pub fn blit(entity: Entity, renderer: *c.SDL_Renderer) void {
+pub fn blit(pos: *Position, tex: *Texture, renderer: *c.SDL_Renderer) void {
     var dest: c.SDL_Rect = c.SDL_Rect{
-        .x = entity.x,
-        .y = entity.y,
-        .w = entity.w,
-        .h = entity.h,
+        .x = pos.x,
+        .y = pos.y,
+        .w = tex.w,
+        .h = tex.h,
     };
 
-    _ = c.SDL_RenderCopy(renderer, entity.texture, null, &dest);
+    _ = c.SDL_RenderCopy(renderer, tex.texture, null, &dest);
 }

@@ -8,7 +8,7 @@ const AutoHashMap = std.AutoHashMap;
 const test_alloc = std.testing.allocator;
 const expectEqual = std.testing.expectEqual;
 
-pub const ComponentManager = struct {
+pub const Manager = struct {
     const Self = @This();
 
     allocator: Allocator,
@@ -32,12 +32,13 @@ pub const ComponentManager = struct {
         self.comp_map.deinit();
     }
 
-    pub fn addComponent(self: *Self, parent: anytype) !void {
-        const T = @TypeOf(parent);
+    pub fn addComponent(self: *Self, comptime T: type, parent: T) !*T {
         const id = utils.typeId(T);
         const gop = try self.comp_map.getOrPut(id);
 
-        if (gop.found_existing) return;
+        if (gop.found_existing) {
+            _ = self.removeComponent(T);
+        }
 
         var new_ptr = try self.allocator.create(T);
         errdefer self.allocator.destroy(new_ptr);
@@ -52,6 +53,8 @@ pub const ComponentManager = struct {
                 }
             }).deinit,
         };
+
+        return new_ptr;
     }
 
     pub fn removeComponent(self: *Self, comptime T: type) ?T {
@@ -73,7 +76,7 @@ pub const ComponentManager = struct {
 };
 
 
-pub const ErasedComponent = struct {
+const ErasedComponent = struct {
     ptr: *anyopaque,
     deinit: fn (erased: *anyopaque, allocator: Allocator) void,
 
@@ -82,30 +85,30 @@ pub const ErasedComponent = struct {
     }
 };
 
-pub const HealthComponent = struct {
+pub const Health = struct {
     health: i32 = 0,
 };
 
-pub const FighterComponent = struct {
-    reload_speed: i32 = 0,
+pub const Fighter = struct {
+    reload: i32 = 0,
 };
 
-pub const PositionComponent = struct {
+pub const Position = struct {
     x: i32 = 0,
     y: i32 = 0,
 };
 
-pub const VelocityComponent = struct {
+pub const Velocity = struct {
     dx: i32 = 0,
     dy: i32 = 0,
 };
 
-pub const TextureComponent = struct {
+pub const Texture = struct {
     w: i32 = 0,
     h: i32 = 0,
     texture: *c.SDL_Texture,
 
-    pub fn init(texture: *c.SDL_Texture) TextureComponent {
+    pub fn init(texture: *c.SDL_Texture) Texture {
         var w: i32 = 0;
         var h: i32 = 0;
 
@@ -122,33 +125,33 @@ pub const TextureComponent = struct {
 };
 
 test "Add a component" {
-    var manager = ComponentManager.init(test_alloc);
+    var manager = Manager.init(test_alloc);
     defer manager.deinit();
 
-    const health: HealthComponent = .{ .health = 100 };
+    const health: Health = .{ .health = 100 };
 
     try manager.addComponent(health);
     try expectEqual(manager.comp_map.count(), 1);
 }
 
 test "Get a component" {
-    var manager = ComponentManager.init(test_alloc);
+    var manager = Manager.init(test_alloc);
     defer manager.deinit();
 
-    const health: HealthComponent = .{ .health = 50 };
+    const health: Health = .{ .health = 50 };
 
     try manager.addComponent(health);
-    const comp = manager.getComponent(HealthComponent).?;
+    const comp = manager.getComponent(Health).?;
 
     try expectEqual(comp.health, 50);
 }
 
 test "Modify a component" {
-    var manager = ComponentManager.init(test_alloc);
+    var manager = Manager.init(test_alloc);
     defer manager.deinit();
 
-    try manager.addComponent(HealthComponent{ .health = 50 });
-    const component = manager.getComponent(HealthComponent).?;
+    try manager.addComponent(Health{ .health = 50 });
+    const component = manager.getComponent(Health).?;
 
     component.health = 2000;
 
@@ -156,32 +159,32 @@ test "Modify a component" {
 }
 
 test "Add two components" {
-    var manager = ComponentManager.init(test_alloc);
+    var manager = Manager.init(test_alloc);
     defer manager.deinit();
 
-    const health = HealthComponent{ .health = 50 };
-    const position = PositionComponent{ .x = 100, .y = 100 };
+    const health = Health{ .health = 50 };
+    const position = Position{ .x = 100, .y = 100 };
 
     try manager.addComponent(health);
     try manager.addComponent(position);
 
     try expectEqual(manager.comp_map.count(), 2);
 
-    const managedPosition = manager.getComponent(PositionComponent).?;
-    const managedHealth = manager.getComponent(HealthComponent).?;
+    const managedPosition = manager.getComponent(Position).?;
+    const managedHealth = manager.getComponent(Health).?;
 
     try expectEqual(managedHealth.health, 50);
     try expectEqual(managedPosition.x, 100);
 }
 
 test "Remove component" {
-    var manager = ComponentManager.init(test_alloc);
+    var manager = Manager.init(test_alloc);
     defer manager.deinit();
 
-    try manager.addComponent(HealthComponent{ .health = 50 });
-    try manager.addComponent(PositionComponent{ .x = 100, .y = 0 });
+    try manager.addComponent(Health{ .health = 50 });
+    try manager.addComponent(Position{ .x = 100, .y = 0 });
 
-    const c_health = manager.removeComponent(HealthComponent).?;
+    const c_health = manager.removeComponent(Health).?;
 
     try expectEqual(manager.comp_map.count(), 1);
     try expectEqual(c_health.health, 50);
