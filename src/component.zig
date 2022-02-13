@@ -53,6 +53,17 @@ pub const ComponentManager = struct {
         };
     }
 
+    pub fn removeComponent(self: *Self, comptime T: type) ?T {
+        const id = utils.typeId(T);
+        const kv = self.comp_map.fetchRemove(id) orelse return null;
+        const wrapper = kv.value;
+        const component = ErasedComponent.cast(wrapper.ptr, T).*;
+
+        wrapper.deinit(wrapper.ptr, self.allocator);
+
+        return component;
+    }
+
     pub fn getComponent(self: *Self, comptime T: type) ?*T {
         const id = utils.typeId(T);
         var wrapper: ErasedComponent = self.comp_map.get(id) orelse return null;
@@ -130,4 +141,17 @@ test "Add two components" {
 
     try expectEqual(managedHealth.health, 50);
     try expectEqual(managedPosition.x, 100);
+}
+
+test "Remove component" {
+    var manager = ComponentManager.init(test_alloc);
+    defer manager.deinit();
+
+    try manager.addComponent(HealthComponent{ .health = 50 });
+    try manager.addComponent(PositionComponent{ .x = 100, .y = 0 });
+
+    const c_health = manager.removeComponent(HealthComponent).?;
+
+    try expectEqual(manager.comp_map.count(), 1);
+    try expectEqual(c_health.health, 50);
 }
