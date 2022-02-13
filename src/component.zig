@@ -1,5 +1,6 @@
 const std = @import("std");
 const utils = @import("./utils.zig");
+const c = @import("./c.zig");
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
@@ -82,12 +83,42 @@ pub const ErasedComponent = struct {
 };
 
 pub const HealthComponent = struct {
-    health: i32,
+    health: i32 = 0,
+};
+
+pub const FighterComponent = struct {
+    reload_speed: i32 = 0,
 };
 
 pub const PositionComponent = struct {
-    x: i32,
-    y: i32,
+    x: i32 = 0,
+    y: i32 = 0,
+};
+
+pub const VelocityComponent = struct {
+    dx: i32 = 0,
+    dy: i32 = 0,
+};
+
+pub const TextureComponent = struct {
+    w: i32 = 0,
+    h: i32 = 0,
+    texture: *c.SDL_Texture,
+
+    pub fn init(texture: *c.SDL_Texture) TextureComponent {
+        var w: i32 = 0;
+        var h: i32 = 0;
+
+        if (c.SDL_QueryTexture(texture, null, null, &w, &h) < 0 ) {
+            c.SDL_Log("Could not query texture: %s", c.SDL_GetError());
+        }
+
+        return .{
+            .w = w,
+            .h = h,
+            .texture = texture,
+        };
+    }
 };
 
 test "Add a component" {
