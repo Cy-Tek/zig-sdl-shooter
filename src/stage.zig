@@ -10,9 +10,9 @@ const Allocator = std.mem.Allocator;
 const component = @import("./component.zig");
 const Fighter = component.Fighter;
 const Health = component.Health;
-const Position = component.Position;
 const Velocity = component.Velocity;
 const Texture = component.Texture;
+const Bounds = component.Bounds;
 
 pub const Level = struct {
     stage: *anyopaque,
@@ -89,13 +89,15 @@ pub const Stage = struct {
     fn initPlayer(app: *App, alloc: Allocator) !Entity {
         var player = Entity.init(alloc);
 
-        _ = try player.addComponent(Health, Health{});
-        _ = try player.addComponent(Fighter, Fighter{});
-        _ = try player.addComponent(Position, Position{ .x = 100, .y = 100 });
-        _ = try player.addComponent(Velocity, Velocity{});
+        _ = try player.addComponent(Health, .{});
+        _ = try player.addComponent(Fighter, .{});
+        _ = try player.addComponent(Velocity, .{});
+        const bounds = try player.addComponent(Bounds, .{ .x = 100, .y = 100 });
 
         const texture = try draw.loadTexture("gfx/player.png", app.renderer);
-        _ = try player.addComponent(Texture, Texture.init(texture));
+        const tex = try player.addComponent(Texture, .{ .texture = texture });
+
+        tex.getWidthHeight(&bounds.w, &bounds.h);
 
         return player;
     }
@@ -114,8 +116,8 @@ pub const Stage = struct {
 
     fn processPlayer(self: *@This()) void {
         const velocity = self.player.getComponent(Velocity).?;
-        const position = self.player.getComponent(Position).?;
         const fighter = self.player.getComponent(Fighter).?;
+        const bounds = self.player.getComponent(Bounds).?;
 
         velocity.* = .{ .dx = 0, .dy = 0 };
 
@@ -139,25 +141,26 @@ pub const Stage = struct {
             self.fireBullet() catch std.log.err("Could not fire bullet", .{});
         }
 
-        position.x += velocity.dx;
-        position.y += velocity.dy;
+        bounds.x += velocity.dx;
+        bounds.y += velocity.dy;
     }
 
     fn fireBullet(self: *@This()) !void {
-        const p_texture = self.player.getComponent(Texture).?;
-        const p_position = self.player.getComponent(Position).?;
+        const p_bounds = self.player.getComponent(Bounds).?;
         const p_fighter = self.player.getComponent(Fighter).?;
 
         var bullet = Entity.init(self.arena.allocator());
 
-        const b_texture = try bullet.addComponent(Texture, Texture.init(self.bullet_texture));
-        _ = try bullet.addComponent(Health, Health{ .health = 1 });
-        _ = try bullet.addComponent(Velocity, Velocity{ .dx = config.PlayerBulletSpeed });
-        _ = try bullet.addComponent(Position, Position{
-            .x = p_position.x + p_texture.w,
-            .y = p_position.y + @divFloor(p_texture.h, 2) - @divFloor(b_texture.h, 2),
+        const b_texture = try bullet.addComponent(Texture, .{ .texture = self.bullet_texture });
+        const b_bounds = try bullet.addComponent(Bounds, .{
+            .x = p_bounds.x + p_bounds.w,
         });
 
+        b_texture.getWidthHeight(&b_bounds.w, &b_bounds.h);
+        b_bounds.y = p_bounds.y + @divFloor(p_bounds.h, 2) - @divFloor(b_bounds.h, 2);
+
+        _ = try bullet.addComponent(Health, .{ .health = 1 });
+        _ = try bullet.addComponent(Velocity, .{ .dx = config.PlayerBulletSpeed });
 
         self.bullets.append(bullet) catch std.log.err("Could not append bullet", .{});
 
@@ -168,13 +171,13 @@ pub const Stage = struct {
         var i: usize = 0;
         while (i < self.bullets.items.len) : (i += 1) {
             const bullet = &self.bullets.items[i];
-            var position = bullet.getComponent(Position).?;
+            var bounds = bullet.getComponent(Bounds).?;
             var velocity = bullet.getComponent(Velocity).?;
 
-            position.x += velocity.dx;
-            position.y += velocity.dy;
+            bounds.x += velocity.dx;
+            bounds.y += velocity.dy;
 
-            if (position.x > config.ScreenWidth) {
+            if (bounds.x > config.ScreenWidth or bounds.x < -bounds.w) {
                 _ = self.bullets.swapRemove(i);
                 i = if (i == 0) 0 else i - 1; // Reset the index to process the swapped bullet
             }
@@ -197,11 +200,12 @@ pub const Stage = struct {
         var random = self.rand.random();
         var enemy = Entity.init(self.arena.allocator());
 
-        var tex = try enemy.addComponent(Texture, Texture.init(self.enemy_texture));
-        var pos = try enemy.addComponent(Position, .{ .x = config.ScreenWidth });
-        _ = try enemy.addComponent(Velocity, .{ .dx = -random.intRangeAtMost(i32, 2, 6 )});
+        var tex = try enemy.addComponent(Texture, .{ .texture = self.enemy_texture });
+        var bounds = try enemy.addComponent(Bounds, .{ .x = config.ScreenWidth });
+        tex.getWidthHeight(&bounds.w, &bounds.h);
+        bounds.y = random.intRangeAtMost(i32, 0, config.ScreenHeight - bounds.h);
 
-        pos.y = random.intRangeAtMost(i32, 0, config.ScreenHeight - tex.h);
+        _ = try enemy.addComponent(Velocity, .{ .dx = -random.intRangeAtMost(i32, 2, 6) });
 
         return enemy;
     }
@@ -210,14 +214,13 @@ pub const Stage = struct {
         var i: usize = 0;
         while (i < self.enemies.items.len) : (i += 1) {
             var enemy = &self.enemies.items[i];
-            const pos = enemy.getComponent(Position).?;
+            const bounds = enemy.getComponent(Bounds).?;
             const vel = enemy.getComponent(Velocity).?;
-            const tex = enemy.getComponent(Texture).?;
 
-            pos.x += vel.dx;
-            pos.y += vel.dy;
+            bounds.x += vel.dx;
+            bounds.y += vel.dy;
 
-            if (pos.x < -tex.w) {
+            if (bounds.x < -bounds.w) {
                 _ = self.enemies.swapRemove(i);
                 i = if (i == 0) 0 else i - 1;
             }
@@ -233,27 +236,27 @@ pub const Stage = struct {
     }
 
     fn drawPlayer(self: *@This()) void {
-        const pos = self.player.getComponent(Position).?;
+        const bounds = self.player.getComponent(Bounds).?;
         const tex = self.player.getComponent(Texture).?;
 
-        draw.blit(pos, tex, self.app.renderer);
+        draw.blit(bounds.*, tex.texture, self.app.renderer);
     }
 
     fn drawBullets(self: *@This()) void {
         for (self.bullets.items) |*bullet| {
-            const pos = bullet.getComponent(Position).?;
+            const bounds = bullet.getComponent(Bounds).?;
             const tex = bullet.getComponent(Texture).?;
 
-            draw.blit(pos, tex, self.app.renderer);
+            draw.blit(bounds.*, tex.texture, self.app.renderer);
         }
     }
 
     fn drawEnemies(self: *@This()) void {
         for (self.enemies.items) |*enemy| {
-            const pos = enemy.getComponent(Position).?;
+            const bounds = enemy.getComponent(Bounds).?;
             const tex = enemy.getComponent(Texture).?;
 
-            draw.blit(pos, tex, self.app.renderer);
+            draw.blit(bounds.*, tex.texture, self.app.renderer);
         }
     }
 };

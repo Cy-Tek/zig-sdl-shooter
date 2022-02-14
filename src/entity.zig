@@ -2,6 +2,8 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 
 const comp = @import("./component.zig");
+const Position = comp.Position;
+const Texture = comp.Texture;
 
 pub const Entity = struct {
     components: comp.Manager,
