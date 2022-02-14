@@ -5,3 +5,8 @@ pub const PlayerSpeed = 6;
 pub const PlayerBulletSpeed = 20;
 
 pub const MaxKeyboardKeys = 350;
+
+pub const Side = enum {
+    player,
+    enemy
+};

@@ -4,6 +4,7 @@ const Entity = @import("./entity.zig").Entity;
 const App = @import("./app.zig").App;
 const draw = @import("./draw.zig");
 const config = @import("./consts.zig");
+const Side = config.Side;
 const utils = @import("./utils.zig");
 const Allocator = std.mem.Allocator;
 
@@ -87,7 +88,7 @@ pub const Stage = struct {
     }
 
     fn initPlayer(app: *App, alloc: Allocator) !Entity {
-        var player = Entity.init(alloc);
+        var player = Entity.init(.player, alloc);
 
         _ = try player.addComponent(Health, .{});
         _ = try player.addComponent(Fighter, .{});
@@ -138,18 +139,18 @@ pub const Stage = struct {
             velocity.dx = config.PlayerSpeed;
         }
         if (self.app.keyboard[c.SDL_SCANCODE_LCTRL] and fighter.reload == 0) {
-            self.fireBullet() catch std.log.err("Could not fire bullet", .{});
+            self.fireBullet(.player) catch std.log.err("Could not fire bullet", .{});
         }
 
         bounds.x += velocity.dx;
         bounds.y += velocity.dy;
     }
 
-    fn fireBullet(self: *@This()) !void {
+    fn fireBullet(self: *@This(), side: Side) !void {
         const p_bounds = self.player.getComponent(Bounds).?;
         const p_fighter = self.player.getComponent(Fighter).?;
 
-        var bullet = Entity.init(self.arena.allocator());
+        var bullet = Entity.init(side, self.arena.allocator());
 
         const b_texture = try bullet.addComponent(Texture, .{ .texture = self.bullet_texture });
         const b_bounds = try bullet.addComponent(Bounds, .{
@@ -171,15 +172,46 @@ pub const Stage = struct {
         var i: usize = 0;
         while (i < self.bullets.items.len) : (i += 1) {
             const bullet = &self.bullets.items[i];
-            var bounds = bullet.getComponent(Bounds).?;
+            const b_health = bullet.getComponent(Health).?;
+            var b_bounds = bullet.getComponent(Bounds).?;
             var velocity = bullet.getComponent(Velocity).?;
 
-            bounds.x += velocity.dx;
-            bounds.y += velocity.dy;
+            b_bounds.x += velocity.dx;
+            b_bounds.y += velocity.dy;
 
-            if (bounds.x > config.ScreenWidth or bounds.x < -bounds.w) {
+            if (b_health.health <= 0) {
                 _ = self.bullets.swapRemove(i);
                 i = if (i == 0) 0 else i - 1; // Reset the index to process the swapped bullet
+                continue;
+            }
+
+            if (b_bounds.x > config.ScreenWidth or b_bounds.x < -b_bounds.w) {
+                _ = self.bullets.swapRemove(i);
+                i = if (i == 0) 0 else i - 1; // Reset the index to process the swapped bullet
+                continue;
+            }
+
+            switch (bullet.side) {
+                .enemy => {
+                    const p_bounds = self.player.getComponent(Bounds).?;
+                    if (p_bounds.isColliding(b_bounds.*)) {
+                        const p_health = self.player.getComponent(Health).?;
+
+                        p_health.health -= 1;
+                        b_health.health -= 1;
+                    }
+                },
+                .player => {
+                    for (self.enemies.items) |*enemy| {
+                        const e_bounds = enemy.getComponent(Bounds).?;
+                        if (e_bounds.isColliding(b_bounds.*)) {
+                            const e_health = enemy.getComponent(Health).?;
+
+                            e_health.health -= 1;
+                            b_health.health -= 1;
+                        }
+                    }
+                }
             }
         }
     }
@@ -198,7 +230,7 @@ pub const Stage = struct {
 
     fn createEnemy(self: *@This()) !Entity {
         var random = self.rand.random();
-        var enemy = Entity.init(self.arena.allocator());
+        var enemy = Entity.init(.enemy, self.arena.allocator());
 
         var tex = try enemy.addComponent(Texture, .{ .texture = self.enemy_texture });
         var bounds = try enemy.addComponent(Bounds, .{ .x = config.ScreenWidth });
@@ -206,6 +238,7 @@ pub const Stage = struct {
         bounds.y = random.intRangeAtMost(i32, 0, config.ScreenHeight - bounds.h);
 
         _ = try enemy.addComponent(Velocity, .{ .dx = -random.intRangeAtMost(i32, 2, 6) });
+        _ = try enemy.addComponent(Health, .{ .health = 3 });
 
         return enemy;
     }
@@ -214,8 +247,15 @@ pub const Stage = struct {
         var i: usize = 0;
         while (i < self.enemies.items.len) : (i += 1) {
             var enemy = &self.enemies.items[i];
+            const health = enemy.getComponent(Health).?;
             const bounds = enemy.getComponent(Bounds).?;
             const vel = enemy.getComponent(Velocity).?;
+
+            if (health.health <= 0) {
+                _ = self.enemies.swapRemove(i);
+                i = if (i == 0) 0 else i - 1;
+                continue;
+            }
 
             bounds.x += vel.dx;
             bounds.y += vel.dy;
